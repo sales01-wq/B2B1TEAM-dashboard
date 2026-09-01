@@ -84,6 +84,7 @@
   .expand-detail { max-height: 220px; overflow-y: auto; background: var(--porcelain); }
   .expand-detail table { font-size: 12px; }
   .expand-detail td { padding: 6px 14px; }
+  .channel-detail-row td { background: #FAF8F4; font-size: 12px; padding-top: 6px; padding-bottom: 6px; border-bottom: 1px solid #EFE9DF; }
   .footer { text-align: center; font-size: 11px; color: var(--slate); margin-top: 24px; }
   .hidden { display: none !important; }
   .legend-row { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 10px; font-size: 12px; color: var(--slate); justify-content: center; }
@@ -543,8 +544,9 @@ function channelOf(customer, source) {
   if (source === "러시아/CIS") return "러시아/CIS";
   return CHANNEL_MAP[customer] || "그외";
 }
-const WEEKLY_TARGET_YEAR = 2026;
-let WEEKLY_TARGET_MONTH = 8; // "월별 매출" tab's selected month; changeable via the month selector
+const _now = new Date();
+let WEEKLY_TARGET_YEAR = _now.getFullYear();
+let WEEKLY_TARGET_MONTH = _now.getMonth() + 1; // "월별 매출" tab defaults to the current month; changeable via the month selector
 const PALETTE = ["#C9788A", "#5B8A9E", "#7C9473", "#D4A24C", "#8B7BA8", "#B85C4F"];
 const SVGNS = "http://www.w3.org/2000/svg";
 
@@ -1524,7 +1526,7 @@ function renderWeekly() {
   const peakIdx = weeklyTotal.reduce((best, v, i) => (v > weeklyTotal[best] ? i : best), 0);
   const topCustomer = customers[0];
   const forecastCat = brandFilter === "전체" ? "B2B 전체" : brandFilter;
-  const forecastTotal = (PLAN[forecastCat] && PLAN[forecastCat].monthly[WEEKLY_TARGET_MONTH - 1]) ? PLAN[forecastCat].monthly[WEEKLY_TARGET_MONTH - 1].actual : 0;
+  const forecastTotal = (PLAN[forecastCat] && PLAN[forecastCat].monthly[WEEKLY_TARGET_MONTH - 1]) ? PLAN[forecastCat].monthly[WEEKLY_TARGET_MONTH - 1].forecast : 0;
 
   document.getElementById("weeklyKpis").innerHTML =
     kpiCard(`${mo}월 실 매출`, { isAmount: true, value: grandTotal }, `거래 ${rows.length}건`, "var(--slate)", "var(--rose)") +
@@ -1565,7 +1567,7 @@ function renderWeekly() {
   };
   const brandAchieveRows = Object.keys(PLAN).map((cat) => {
     const augPlanRow = PLAN[cat].monthly[WEEKLY_TARGET_MONTH - 1]; // selected month, 1-indexed => array index -1
-    return { name: cat, target: augPlanRow.target, plan: augPlanRow.plan, forecast: augPlanRow.actual, actual: realActualFor(cat) };
+    return { name: cat, target: augPlanRow.target, plan: augPlanRow.plan, forecast: augPlanRow.forecast, actual: realActualFor(cat) };
   });
   document.getElementById("weeklyBrandAchieveBody").innerHTML = brandAchieveRows.map((r) => {
     const targetRate = rateOf(r.actual, r.target);
@@ -1618,7 +1620,7 @@ function renderWeekly() {
       .sort((a, b) => b.total - a.total);
 
   const channelRows2 = Object.entries(channelData)
-    .map(([label, c]) => ({ label, target: c.monthly[WEEKLY_TARGET_MONTH - 1].target, plan: c.monthly[WEEKLY_TARGET_MONTH - 1].plan, forecast: c.monthly[WEEKLY_TARGET_MONTH - 1].actual, actual: realChannelTotals[label] || 0 }))
+    .map(([label, c]) => ({ label, target: c.monthly[WEEKLY_TARGET_MONTH - 1].target, plan: c.monthly[WEEKLY_TARGET_MONTH - 1].plan, forecast: c.monthly[WEEKLY_TARGET_MONTH - 1].forecast, actual: realChannelTotals[label] || 0 }))
     .sort((a, b) => b.actual - a.actual);
 
   document.getElementById("weeklyChannelAchieveBody").innerHTML = channelRows2.map((c, i) => {
@@ -1640,6 +1642,29 @@ function renderWeekly() {
     }
     const custList = customerListFor(c.label);
     const rowId = `channelRow${i}`, detailId = `channelDetail${i}`, caretId = `channelCaret${i}`;
+    const dash = `<td class="num" style="color:var(--line);">–</td>`;
+    const detailRowsHtml = custList.length ? custList.map((o) => {
+      const sbmt = showSbMt ? formatSbMtPair(o.sb, o.mt, o.total) : null;
+      const totalCell = `<td class="num" style="font-weight:600;">${won(o.total)} <span style="opacity:.6; font-weight:500; font-size:11px;">(${wonShort(o.total)})</span></td>`;
+      const sbmtCells = showSbMt
+        ? `<td class="num sbmt-col" style="color:var(--ink);">${o.sb > 0 ? sbmt.sbText : "–"}</td><td class="num sbmt-col" style="color:var(--ink);">${o.mt > 0 ? sbmt.mtText : "–"}</td>`
+        : "";
+      return `
+      <tr class="channel-detail-row hidden" data-parent="${detailId}">
+        <td style="padding-left:34px; color:var(--slate); font-weight:400;">${o.name}</td>
+        ${dash}${dash}
+        ${totalCell}
+        ${dash}
+        ${sbmtCells}
+        ${dash}${dash}${dash}${dash}
+      </tr>`;
+    }).join("") : `
+      <tr class="channel-detail-row hidden" data-parent="${detailId}">
+        <td style="padding-left:34px; color:var(--slate);">${mo}월 실거래 없음</td>
+        ${dash}${dash}${dash}${dash}
+        ${showSbMt ? dash + dash : ""}
+        ${dash}${dash}${dash}${dash}
+      </tr>`;
     return `
       <tr class="expand-row" id="${rowId}">
         <td style="font-weight:600;"><span class="expand-caret" id="${caretId}">▶</span>${c.label}</td>
@@ -1653,41 +1678,15 @@ function renderWeekly() {
         <td class="num" style="color:${ftColor}; font-weight:700; opacity:.85;">${forecastTargetRate.toFixed(0)}%</td>
         <td class="num" style="color:${fpColor}; font-weight:700; opacity:.85;">${forecastPlanRate.toFixed(0)}%</td>
       </tr>
-      <tr id="${detailId}" class="hidden">
-        <td colspan="11" style="padding:0;">
-          <div class="expand-detail">
-            <table style="width:100%;">
-              ${showSbMt ? `
-              <thead>
-                <tr style="font-size:10px; color:var(--slate);">
-                  <td style="padding-left:34px;">거래처</td>
-                  <td class="num">SB</td>
-                  <td class="num">MT</td>
-                  <td class="num">합계</td>
-                </tr>
-              </thead>` : ""}
-              <tbody>
-                ${custList.length ? custList.map((o) => {
-                  const sbmt = showSbMt ? formatSbMtPair(o.sb, o.mt, o.total) : null;
-                  return `
-                  <tr>
-                    <td style="padding-left:34px; color:var(--slate);">${o.name}</td>
-                    ${showSbMt ? `<td class="num" style="color:var(--ink);">${o.sb > 0 ? sbmt.sbText : "–"}</td><td class="num" style="color:var(--ink);">${o.mt > 0 ? sbmt.mtText : "–"}</td>` : ""}
-                    <td class="num" style="font-weight:600;">${won(o.total)} <span style="opacity:.6; font-weight:500;">(${wonShort(o.total)})</span></td>
-                  </tr>`;
-                }).join("") : `<tr><td style="padding-left:34px; color:var(--slate);">${mo}월 실거래 없음</td><td></td></tr>`}
-              </tbody>
-            </table>
-          </div>
-        </td>
-      </tr>`;
+      ${detailRowsHtml}`;
   }).join("");
 
   channelRows2.forEach((c, i) => {
     const rowEl = document.getElementById(`channelRow${i}`);
     if (!rowEl) return;
+    const detailId = `channelDetail${i}`;
     rowEl.addEventListener("click", () => {
-      document.getElementById(`channelDetail${i}`).classList.toggle("hidden");
+      document.querySelectorAll(`tr.channel-detail-row[data-parent="${detailId}"]`).forEach((tr) => tr.classList.toggle("hidden"));
       document.getElementById(`channelCaret${i}`).classList.toggle("open");
     });
   });
@@ -1987,26 +1986,34 @@ function rebuildAllFromRaw(rawAll, sumAgg) {
 
 // ---- 하반기 매출계획 주간 매출 → PLAN + PLAN_CHANNELS ----
 function buildPlanAndChannels(rows) {
-  // Locate each month's target/plan/actual columns dynamically by reading the
-  // header row's text (e.g. "9월 수정 목표", "9월 계획", "9월 마감") instead of
-  // hardcoding column numbers — the sheet's column layout has shifted more than
-  // once as the team edits it, which silently broke fixed-index lookups before.
+  // Locate each month's target/plan/actual(누적)/forecast(예상마감) columns dynamically
+  // by reading the header row's text, instead of hardcoding column numbers — the
+  // sheet's column layout has shifted more than once as the team edits it, which
+  // silently broke fixed-index lookups before.
   const HEADER_ROW_IDX = 10; // Excel row 11 (0-indexed)
   const headerRow = rows[HEADER_ROW_IDX] || [];
   const monthColsMap = {};
   headerRow.forEach((cellText, c) => {
     if (!cellText || typeof cellText !== "string") return;
     const text = cellText.trim();
-    let m;
-    if ((m = text.match(/^(\d{1,2})월\s*(?:수정\s*)?목표$/))) { (monthColsMap[+m[1]] = monthColsMap[+m[1]] || {}).target = c; return; }
-    if ((m = text.match(/^(\d{1,2})월\s*계획$/))) { (monthColsMap[+m[1]] = monthColsMap[+m[1]] || {}).plan = c; return; }
-    if ((m = text.match(/^(\d{1,2})월\s*마감$/))) { (monthColsMap[+m[1]] = monthColsMap[+m[1]] || {}).actual = c; return; }
+    const mo = text.match(/^(\d{1,2})월/);
+    if (!mo) return;
+    if (/달성률/.test(text)) return; // skip rate columns entirely
+    const bucket = (monthColsMap[+mo[1]] = monthColsMap[+mo[1]] || {});
+    if (/예상\s*마감/.test(text)) { bucket.forecast = c; return; } // "N월 예상마감" → forecast
+    if (/마감/.test(text)) { bucket.actual = c; return; } // "N월 마감" or "N월 마감(누적)" → actual
+    if (/목표/.test(text)) { bucket.target = c; return; }
+    if (/계획/.test(text)) { bucket.plan = c; return; }
   });
   const MONTHS = [];
   for (let mo = 1; mo <= 12; mo++) {
-    const mc = monthColsMap[mo];
-    MONTHS.push([mo, mc ? mc.target : -1, mc ? mc.plan : -1, mc ? mc.actual : -1]);
+    const mc = monthColsMap[mo] || {};
+    MONTHS.push([mo, mc.target ?? -1, mc.plan ?? -1, mc.actual ?? -1, mc.forecast ?? -1]);
   }
+  console.log("[dashboard] 감지된 월별 컬럼 (월: 목표/계획/실적(누적)/예상마감 열 / 실제 헤더 텍스트):");
+  MONTHS.forEach(([mo, tc, pc, ac, fc]) => {
+    console.log(`  ${mo}월: target=col${tc}("${headerRow[tc]}") plan=col${pc}("${headerRow[pc]}") actual=col${ac}("${headerRow[ac]}") forecast=col${fc}("${headerRow[fc]}")`);
+  });
 
   const CATS = { "B2B 전체": 11, "성분에디터": 20, "밀크터치": 31, "마미케어": 42 };
   const val = (r, c) => (c >= 0 && r && r[c] !== undefined ? gnum(r[c]) : 0);
@@ -2014,7 +2021,7 @@ function buildPlanAndChannels(rows) {
   const plan = {};
   Object.entries(CATS).forEach(([name, rIdx]) => {
     const r = rows[rIdx];
-    const monthly = MONTHS.map(([m, tc, pc, ac]) => ({ month: m, target: val(r, tc), plan: val(r, pc), actual: val(r, ac) }));
+    const monthly = MONTHS.map(([m, tc, pc, ac, fc]) => ({ month: m, target: val(r, tc), plan: val(r, pc), actual: val(r, ac), forecast: val(r, fc) }));
     plan[name] = {
       monthly,
       annual: { actual2025: val(r, 1), target2026: val(r, 2), plan2026: val(r, 3) },
@@ -2036,20 +2043,24 @@ function buildPlanAndChannels(rows) {
         annual: { target2026: val(r, 2), plan2026: val(r, 3) },
         h1: { target: val(r, 40), actual: val(r, 41) },
         h2: { target: val(r, 82), revised: val(r, 83), gap: val(r, 84) },
-        monthly: MONTHS.map(([m, tc, pc, ac]) => ({ month: m, target: val(r, tc), plan: val(r, pc), actual: val(r, ac) })),
+        monthly: MONTHS.map(([m, tc, pc, ac, fc]) => ({ month: m, target: val(r, tc), plan: val(r, pc), actual: val(r, ac), forecast: val(r, fc) })),
       };
     });
     return out;
   }
   const channels = { "B2B 전체": extractChannels(CH_B2B), "성분에디터": extractChannels(CH_SB), "밀크터치": extractChannels(CH_MT), "마미케어": extractChannels(CH_MC) };
 
-  // Route around any single broken top-row cell: brand-level actual for the
-  // selected month = sum of its channels' actuals for that same month.
+  // Route around any single broken top-row cell: brand-level actual/forecast for
+  // the selected month = sum of its channels' values for that same month.
   const mi = WEEKLY_TARGET_MONTH - 1;
+  console.log(`[dashboard] ${WEEKLY_TARGET_MONTH}월 raw plan (시트 직접 값) 브랜드별:`, Object.fromEntries(Object.keys(plan).map((cat) => [cat, { actual: plan[cat].monthly[mi].actual, forecast: plan[cat].monthly[mi].forecast }])));
   Object.keys(plan).forEach((cat) => {
-    const chSum = Object.values(channels[cat] || {}).reduce((s, c) => s + c.monthly[mi].actual, 0);
-    if (chSum > 0) plan[cat].monthly[mi].actual = chSum;
+    const chActualSum = Object.values(channels[cat] || {}).reduce((s, c) => s + c.monthly[mi].actual, 0);
+    if (chActualSum > 0) plan[cat].monthly[mi].actual = chActualSum;
+    const chForecastSum = Object.values(channels[cat] || {}).reduce((s, c) => s + c.monthly[mi].forecast, 0);
+    if (chForecastSum > 0) plan[cat].monthly[mi].forecast = chForecastSum;
   });
+  console.log(`[dashboard] ${WEEKLY_TARGET_MONTH}월 최종 plan (채널합산 적용 후) 브랜드별:`, Object.fromEntries(Object.keys(plan).map((cat) => [cat, { actual: plan[cat].monthly[mi].actual, forecast: plan[cat].monthly[mi].forecast }])));
 
   return { PLAN: plan, PLAN_CHANNELS: channels };
 }
@@ -2310,6 +2321,24 @@ renderBrand();
 renderCustomer();
 renderPlan();
 renderWeekly();
+
+// The static data baked into this file is a snapshot of a specific month; if
+// the viewer opens the dashboard in a different month than that snapshot,
+// automatically refresh so "월별 매출" shows real data for the current month
+// right away (falls back to a prompt if no Apps Script URL is configured).
+const STATIC_WEEKLY_DATA_MONTH = 8;
+if (WEEKLY_TARGET_MONTH !== STATIC_WEEKLY_DATA_MONTH) {
+  const status = document.getElementById("refreshStatus");
+  if (getScriptUrl()) {
+    status.textContent = `${WEEKLY_TARGET_MONTH}월 데이터를 구글시트에서 자동으로 불러오는 중...`;
+    status.style.color = "var(--slate)";
+    doRefresh();
+  } else {
+    status.textContent = `이 파일엔 ${STATIC_WEEKLY_DATA_MONTH}월 데이터만 들어있어요 — ${WEEKLY_TARGET_MONTH}월을 보려면 "🔄 새로고침"을 눌러주세요.`;
+    status.style.color = "var(--amber)";
+  }
+}
+
 </script>
 </body>
 </html>
