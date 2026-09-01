@@ -1602,6 +1602,7 @@ function renderWeekly() {
   const realChannelTotals = {};
   const channelCustomerTotals = {}; // { channelLabel: { customerName: total } }
   const channelCustomerBrandTotals = {}; // { channelLabel: { customerName: { brand: total } } }
+  const channelBrandTotals = {}; // { channelLabel: { brand: total } } — same source as the per-customer breakdown below, so parent SB/MT always equals the sum of its children's SB/MT
   rows.forEach((r) => {
     const ch = channelOf(r.customer, r.source);
     realChannelTotals[ch] = (realChannelTotals[ch] || 0) + r.revenue;
@@ -1610,6 +1611,8 @@ function renderWeekly() {
     if (!channelCustomerBrandTotals[ch]) channelCustomerBrandTotals[ch] = {};
     if (!channelCustomerBrandTotals[ch][r.customer]) channelCustomerBrandTotals[ch][r.customer] = {};
     channelCustomerBrandTotals[ch][r.customer][r.brand] = (channelCustomerBrandTotals[ch][r.customer][r.brand] || 0) + r.revenue;
+    if (!channelBrandTotals[ch]) channelBrandTotals[ch] = {};
+    channelBrandTotals[ch][r.brand] = (channelBrandTotals[ch][r.brand] || 0) + r.revenue;
   });
   const customerListFor = (label) =>
     Object.entries(channelCustomerTotals[label] || {})
@@ -1632,13 +1635,16 @@ function renderWeekly() {
     const pColor = planRate >= 100 ? "var(--sage)" : planRate >= 70 ? "var(--amber)" : "var(--rose)";
     const ftColor = forecastTargetRate >= 100 ? "var(--sage)" : forecastTargetRate >= 70 ? "var(--amber)" : "var(--rose)";
     const fpColor = forecastPlanRate >= 100 ? "var(--sage)" : forecastPlanRate >= 70 ? "var(--amber)" : "var(--rose)";
-    // Per-channel breakdown by brand — only computed when filter is "전체" (already brand-scoped otherwise).
+    // Per-channel breakdown by brand, computed from the SAME real-transaction
+    // source as the "실적(실측)" column and the per-customer detail rows below —
+    // so parent SB/MT always sums exactly to the children's SB/MT.
     let sbCell = "", mtCell = "";
     if (showSbMt) {
-      const sbCh = (PLAN_CHANNELS["성분에디터"] || {})[c.label];
-      const mtCh = (PLAN_CHANNELS["밀크터치"] || {})[c.label];
-      sbCell = sbCh ? amountCellHtml(sbCh.monthly[WEEKLY_TARGET_MONTH - 1].actual) : dashCellHtml();
-      mtCell = mtCh ? amountCellHtml(mtCh.monthly[WEEKLY_TARGET_MONTH - 1].actual) : dashCellHtml();
+      const bt = channelBrandTotals[c.label] || {};
+      const sbAmt = bt["성분에디터"] || 0, mtAmt = bt["밀크터치"] || 0;
+      const sbmt = formatSbMtPair(sbAmt, mtAmt, c.actual);
+      sbCell = `<td class="num sbmt-col" style="color:var(--ink); font-weight:700;">${sbAmt > 0 ? sbmt.sbText : "–"}</td>`;
+      mtCell = `<td class="num sbmt-col" style="color:var(--ink); font-weight:700;">${mtAmt > 0 ? sbmt.mtText : "–"}</td>`;
     }
     const custList = customerListFor(c.label);
     const rowId = `channelRow${i}`, detailId = `channelDetail${i}`, caretId = `channelCaret${i}`;
