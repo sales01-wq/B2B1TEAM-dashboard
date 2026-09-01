@@ -1987,9 +1987,29 @@ function rebuildAllFromRaw(rawAll, sumAgg) {
 
 // ---- 하반기 매출계획 주간 매출 → PLAN + PLAN_CHANNELS ----
 function buildPlanAndChannels(rows) {
-  const MONTHS = [[1,4,6,8],[2,9,11,13],[3,14,16,18],[4,22,24,26],[5,27,29,31],[6,32,34,36],[7,43,45,47],[8,53,55,57],[9,62,64,66],[10,67,69,71],[11,72,74,76],[12,77,79,81]];
+  // Locate each month's target/plan/actual columns dynamically by reading the
+  // header row's text (e.g. "9월 수정 목표", "9월 계획", "9월 마감") instead of
+  // hardcoding column numbers — the sheet's column layout has shifted more than
+  // once as the team edits it, which silently broke fixed-index lookups before.
+  const HEADER_ROW_IDX = 10; // Excel row 11 (0-indexed)
+  const headerRow = rows[HEADER_ROW_IDX] || [];
+  const monthColsMap = {};
+  headerRow.forEach((cellText, c) => {
+    if (!cellText || typeof cellText !== "string") return;
+    const text = cellText.trim();
+    let m;
+    if ((m = text.match(/^(\d{1,2})월\s*(?:수정\s*)?목표$/))) { (monthColsMap[+m[1]] = monthColsMap[+m[1]] || {}).target = c; return; }
+    if ((m = text.match(/^(\d{1,2})월\s*계획$/))) { (monthColsMap[+m[1]] = monthColsMap[+m[1]] || {}).plan = c; return; }
+    if ((m = text.match(/^(\d{1,2})월\s*마감$/))) { (monthColsMap[+m[1]] = monthColsMap[+m[1]] || {}).actual = c; return; }
+  });
+  const MONTHS = [];
+  for (let mo = 1; mo <= 12; mo++) {
+    const mc = monthColsMap[mo];
+    MONTHS.push([mo, mc ? mc.target : -1, mc ? mc.plan : -1, mc ? mc.actual : -1]);
+  }
+
   const CATS = { "B2B 전체": 11, "성분에디터": 20, "밀크터치": 31, "마미케어": 42 };
-  const val = (r, c) => (r && r[c] !== undefined ? gnum(r[c]) : 0);
+  const val = (r, c) => (c >= 0 && r && r[c] !== undefined ? gnum(r[c]) : 0);
 
   const plan = {};
   Object.entries(CATS).forEach(([name, rIdx]) => {
