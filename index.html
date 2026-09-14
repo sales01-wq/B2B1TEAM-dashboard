@@ -414,7 +414,7 @@
 
     <div class="card" style="margin-bottom:16px;">
       <div class="chart-title" id="weeklyBrandAchieveTitle">브랜드별 8월 목표 · 계획 달성률</div>
-      <div class="chart-desc" id="weeklyBrandAchieveDesc">8월 실적(실측)은 B2B 북미·러시아/CIS 시트 합산 · 8월 예측은 "하반기 매출계획 주간 매출" 시트의 마감 기준</div>
+      <div class="chart-desc" id="weeklyBrandAchieveDesc">8월 실적(실측)은 B2B 북미·러시아/CIS 시트 합산 기준</div>
       <div class="table-scroll">
         <table>
           <thead>
@@ -423,11 +423,8 @@
               <th class="num" id="brandThTarget">8월 목표</th>
               <th class="num" id="brandThPlan">8월 계획</th>
               <th class="num" id="brandThActual">8월 실적(실측)</th>
-              <th class="num" id="brandThForecast">8월 예측</th>
               <th class="num">목표 달성률</th>
               <th class="num">계획 달성률</th>
-              <th class="num">예상 목표 달성률</th>
-              <th class="num">예상 계획 달성률</th>
             </tr>
           </thead>
           <tbody id="weeklyBrandAchieveBody"></tbody>
@@ -437,7 +434,7 @@
 
     <div class="card" style="margin-bottom:16px;">
       <div class="chart-title" id="weeklyChannelAchieveTitle">거래처(채널)별 8월 목표 · 계획 달성률</div>
-      <div class="chart-desc" id="weeklyChannelAchieveDesc">8월 목표·계획 대비 · 실적(실측)은 B2B 북미·러시아/CIS 매출, 예상마감은 "하반기 매출계획" 시트 기준</div>
+      <div class="chart-desc" id="weeklyChannelAchieveDesc">8월 목표·계획 대비 · 실적(실측)은 B2B 북미·러시아/CIS 매출 기준</div>
       <div class="table-scroll">
         <table>
           <thead>
@@ -446,13 +443,10 @@
               <th class="num" id="channelThTarget">8월 목표</th>
               <th class="num" id="channelThPlan">8월 계획</th>
               <th class="num" id="channelThActual">8월 실적(실측)</th>
-              <th class="num" id="channelThForecast">8월 예상마감</th>
               <th class="num sbmt-col" id="channelAchieveSbHead">SB</th>
               <th class="num sbmt-col" id="channelAchieveMtHead">MT</th>
               <th class="num">목표 달성률</th>
               <th class="num">계획 달성률</th>
-              <th class="num">예상 목표 달성률</th>
-              <th class="num">예상 계획 달성률</th>
             </tr>
           </thead>
           <tbody id="weeklyChannelAchieveBody"></tbody>
@@ -1510,16 +1504,14 @@ function renderWeekly() {
 
   document.getElementById("weeklyTitle").textContent = `${WEEKLY_TARGET_YEAR}년 ${mo}월 주간 매출`;
   document.getElementById("weeklyBrandAchieveTitle").textContent = `브랜드별 ${mo}월 목표 · 계획 달성률`;
-  document.getElementById("weeklyBrandAchieveDesc").textContent = `${mo}월 실적(실측)은 B2B 북미·러시아/CIS 시트 합산 · ${mo}월 예측은 "하반기 매출계획 주간 매출" 시트의 마감 기준`;
+  document.getElementById("weeklyBrandAchieveDesc").textContent = `${mo}월 실적(실측)은 B2B 북미·러시아/CIS 시트 합산 기준`;
   document.getElementById("weeklyChannelAchieveTitle").textContent = `거래처(채널)별 ${mo}월 목표 · 계획 달성률`;
   document.getElementById("brandThTarget").textContent = `${mo}월 목표`;
   document.getElementById("brandThPlan").textContent = `${mo}월 계획`;
   document.getElementById("brandThActual").textContent = `${mo}월 실적(실측)`;
-  document.getElementById("brandThForecast").textContent = `${mo}월 예측`;
   document.getElementById("channelThTarget").textContent = `${mo}월 목표`;
   document.getElementById("channelThPlan").textContent = `${mo}월 계획`;
   document.getElementById("channelThActual").textContent = `${mo}월 실적(실측)`;
-  document.getElementById("channelThForecast").textContent = `${mo}월 예상마감`;
   document.getElementById("weeklyTotalChartDesc").textContent = `${mo}월 1주 ~ 5주`;
 
   document.getElementById("weeklySub").textContent =
@@ -1528,11 +1520,12 @@ function renderWeekly() {
   const peakIdx = weeklyTotal.reduce((best, v, i) => (v > weeklyTotal[best] ? i : best), 0);
   const topCustomer = customers[0];
   const forecastCat = brandFilter === "전체" ? "B2B 전체" : brandFilter;
-  const forecastTotal = (PLAN[forecastCat] && PLAN[forecastCat].monthly[WEEKLY_TARGET_MONTH - 1]) ? PLAN[forecastCat].monthly[WEEKLY_TARGET_MONTH - 1].forecast : 0;
+  const planTotal = (PLAN[forecastCat] && PLAN[forecastCat].monthly[WEEKLY_TARGET_MONTH - 1]) ? PLAN[forecastCat].monthly[WEEKLY_TARGET_MONTH - 1].plan : 0;
+  const targetTotal = (PLAN[forecastCat] && PLAN[forecastCat].monthly[WEEKLY_TARGET_MONTH - 1]) ? PLAN[forecastCat].monthly[WEEKLY_TARGET_MONTH - 1].target : 0;
 
   document.getElementById("weeklyKpis").innerHTML =
-    kpiCard(`${mo}월 실 매출`, { isAmount: true, value: grandTotal }, `거래 ${rows.length}건`, "var(--slate)", "var(--rose)") +
-    kpiCard(`${mo}월 예상 매출`, { isAmount: true, value: forecastTotal }, `"하반기 매출계획" 시트 기준`, "var(--slate)", "var(--blue)") +
+    kpiCard(`${mo}월 목표 합`, { isAmount: true, value: targetTotal }, `"하반기 매출계획" 시트 기준`, "var(--slate)", "var(--rose)") +
+    kpiCard(`${mo}월 계획 매출`, { isAmount: true, value: planTotal }, `"하반기 매출계획" 시트 기준`, "var(--slate)", "var(--blue)") +
     kpiCard("TOP 거래처", { isAmount: false, value: topCustomer ? topCustomer.name : "-" }, topCustomer ? `${won(topCustomer.total)} (${wonShort(topCustomer.total)})` : "", "var(--slate)", "var(--blue)", null, false, true) +
     kpiCard("활성 거래처", { isAmount: false, value: `${customers.length}곳` }, brandFilter === "전체" ? `브랜드 ${WEEKLY.brands.length}개 취급` : `${brandFilter} 기준`, "var(--amber)", "var(--amber)", null, false, true);
 
@@ -1569,28 +1562,21 @@ function renderWeekly() {
   };
   const brandAchieveRows = Object.keys(PLAN).map((cat) => {
     const augPlanRow = PLAN[cat].monthly[WEEKLY_TARGET_MONTH - 1]; // selected month, 1-indexed => array index -1
-    return { name: cat, target: augPlanRow.target, plan: augPlanRow.plan, forecast: augPlanRow.forecast, actual: realActualFor(cat) };
+    return { name: cat, target: augPlanRow.target, plan: augPlanRow.plan, actual: realActualFor(cat) };
   });
   document.getElementById("weeklyBrandAchieveBody").innerHTML = brandAchieveRows.map((r) => {
     const targetRate = rateOf(r.actual, r.target);
     const planRate = rateOf(r.actual, r.plan);
-    const forecastTargetRate = rateOf(r.forecast, r.target);
-    const forecastPlanRate = rateOf(r.forecast, r.plan);
     const tColor = targetRate >= 100 ? "var(--sage)" : targetRate >= 70 ? "var(--amber)" : "var(--rose)";
     const pColor = planRate >= 100 ? "var(--sage)" : planRate >= 70 ? "var(--amber)" : "var(--rose)";
-    const ftColor = forecastTargetRate >= 100 ? "var(--sage)" : forecastTargetRate >= 70 ? "var(--amber)" : "var(--rose)";
-    const fpColor = forecastPlanRate >= 100 ? "var(--sage)" : forecastPlanRate >= 70 ? "var(--amber)" : "var(--rose)";
     return `
       <tr>
         <td style="font-weight:600;">${r.name}</td>
         <td class="num">${wonShort(r.target)}</td>
         <td class="num">${wonShort(r.plan)}</td>
         <td class="num" style="font-weight:600;">${wonShort(r.actual)}</td>
-        <td class="num" style="color:var(--slate);">${wonShort(r.forecast)}</td>
         <td class="num" style="color:${tColor}; font-weight:700;">${targetRate.toFixed(0)}%</td>
         <td class="num" style="color:${pColor}; font-weight:700;">${planRate.toFixed(0)}%</td>
-        <td class="num" style="color:${ftColor}; font-weight:700; opacity:.85;">${forecastTargetRate.toFixed(0)}%</td>
-        <td class="num" style="color:${fpColor}; font-weight:700; opacity:.85;">${forecastPlanRate.toFixed(0)}%</td>
       </tr>`;
   }).join("");
 
@@ -1625,18 +1611,14 @@ function renderWeekly() {
       .sort((a, b) => b.total - a.total);
 
   const channelRows2 = Object.entries(channelData)
-    .map(([label, c]) => ({ label, target: c.monthly[WEEKLY_TARGET_MONTH - 1].target, plan: c.monthly[WEEKLY_TARGET_MONTH - 1].plan, forecast: c.monthly[WEEKLY_TARGET_MONTH - 1].forecast, actual: realChannelTotals[label] || 0 }))
+    .map(([label, c]) => ({ label, target: c.monthly[WEEKLY_TARGET_MONTH - 1].target, plan: c.monthly[WEEKLY_TARGET_MONTH - 1].plan, actual: realChannelTotals[label] || 0 }))
     .sort((a, b) => b.actual - a.actual);
 
   document.getElementById("weeklyChannelAchieveBody").innerHTML = channelRows2.map((c, i) => {
     const targetRate = rateOf(c.actual, c.target);
     const planRate = rateOf(c.actual, c.plan);
-    const forecastTargetRate = rateOf(c.forecast, c.target);
-    const forecastPlanRate = rateOf(c.forecast, c.plan);
     const tColor = targetRate >= 100 ? "var(--sage)" : targetRate >= 70 ? "var(--amber)" : "var(--rose)";
     const pColor = planRate >= 100 ? "var(--sage)" : planRate >= 70 ? "var(--amber)" : "var(--rose)";
-    const ftColor = forecastTargetRate >= 100 ? "var(--sage)" : forecastTargetRate >= 70 ? "var(--amber)" : "var(--rose)";
-    const fpColor = forecastPlanRate >= 100 ? "var(--sage)" : forecastPlanRate >= 70 ? "var(--amber)" : "var(--rose)";
     // Per-channel breakdown by brand, computed from the SAME real-transaction
     // source as the "실적(실측)" column and the per-customer detail rows below —
     // so parent SB/MT always sums exactly to the children's SB/MT.
@@ -1662,16 +1644,15 @@ function renderWeekly() {
         <td style="padding-left:34px; color:var(--slate); font-weight:400;">${o.name}</td>
         ${dash}${dash}
         ${totalCell}
-        ${dash}
         ${sbmtCells}
-        ${dash}${dash}${dash}${dash}
+        ${dash}${dash}
       </tr>`;
     }).join("") : `
       <tr class="channel-detail-row hidden" data-parent="${detailId}">
         <td style="padding-left:34px; color:var(--slate);">${mo}월 실거래 없음</td>
-        ${dash}${dash}${dash}${dash}
+        ${dash}${dash}${dash}
         ${showSbMt ? dash + dash : ""}
-        ${dash}${dash}${dash}${dash}
+        ${dash}${dash}
       </tr>`;
     return `
       <tr class="expand-row" id="${rowId}">
@@ -1679,12 +1660,9 @@ function renderWeekly() {
         <td class="num">${wonShort(c.target)}</td>
         <td class="num">${wonShort(c.plan)}</td>
         <td class="num" style="font-weight:600;">${wonShort(c.actual)}</td>
-        <td class="num" style="color:var(--slate);">${wonShort(c.forecast)}</td>
         ${sbCell}${mtCell}
         <td class="num" style="color:${tColor}; font-weight:700;">${targetRate.toFixed(0)}%</td>
         <td class="num" style="color:${pColor}; font-weight:700;">${planRate.toFixed(0)}%</td>
-        <td class="num" style="color:${ftColor}; font-weight:700; opacity:.85;">${forecastTargetRate.toFixed(0)}%</td>
-        <td class="num" style="color:${fpColor}; font-weight:700; opacity:.85;">${forecastPlanRate.toFixed(0)}%</td>
       </tr>
       ${detailRowsHtml}`;
   }).join("");
