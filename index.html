@@ -524,6 +524,7 @@ const BRAND_COLOR = { "성분에디터": "#C9788A", "밀크터치": "#5B8A9E", "
 // matched here falls into "그외").
 const CHANNEL_MAP = {
   "Unlockt (Target)": "타겟(Unlockt)",
+  "Unlockt(Walmart)": "Unlockt(Walmart)",
   "랜딩인터내셔널": "얼타(Landing)",
   "Most (Costco)": "코스트코",
   "US Marshalls": "TJMAX",
@@ -1611,8 +1612,16 @@ function renderWeekly() {
       .sort((a, b) => b.total - a.total);
 
   const channelRows2 = Object.entries(channelData)
-    .map(([label, c]) => ({ label, target: c.monthly[WEEKLY_TARGET_MONTH - 1].target, plan: c.monthly[WEEKLY_TARGET_MONTH - 1].plan, actual: realChannelTotals[label] || 0 }))
-    .sort((a, b) => b.actual - a.actual);
+    .map(([label, c]) => ({ label, target: c.monthly[WEEKLY_TARGET_MONTH - 1].target, plan: c.monthly[WEEKLY_TARGET_MONTH - 1].plan, actual: realChannelTotals[label] || 0 }));
+  // Add any channel that has real transactions but no matching row in the
+  // "하반기 매출계획" sheet (e.g. a new sub-channel not yet tracked there) —
+  // shown with target/plan as "–" instead of silently folding into "그외".
+  Object.keys(realChannelTotals).forEach((label) => {
+    if (!channelRows2.some((r) => r.label === label)) {
+      channelRows2.push({ label, target: 0, plan: 0, actual: realChannelTotals[label] });
+    }
+  });
+  channelRows2.sort((a, b) => b.actual - a.actual);
 
   document.getElementById("weeklyChannelAchieveBody").innerHTML = channelRows2.map((c, i) => {
     const targetRate = rateOf(c.actual, c.target);
