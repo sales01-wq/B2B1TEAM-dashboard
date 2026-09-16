@@ -1526,7 +1526,7 @@ function renderWeekly() {
 
   document.getElementById("weeklyKpis").innerHTML =
     kpiCard(`${mo}월 목표 합`, { isAmount: true, value: targetTotal }, `"하반기 매출계획" 시트 기준`, "var(--slate)", "var(--rose)") +
-    kpiCard(`${mo}월 계획 매출`, { isAmount: true, value: planTotal }, `"하반기 매출계획" 시트 기준`, "var(--slate)", "var(--blue)") +
+    kpiCard(`${mo}월 실적(실측)`, { isAmount: true, value: grandTotal }, `거래 ${rows.length}건`, "var(--slate)", "var(--blue)") +
     kpiCard("TOP 거래처", { isAmount: false, value: topCustomer ? topCustomer.name : "-" }, topCustomer ? `${won(topCustomer.total)} (${wonShort(topCustomer.total)})` : "", "var(--slate)", "var(--blue)", null, false, true) +
     kpiCard("활성 거래처", { isAmount: false, value: `${customers.length}곳` }, brandFilter === "전체" ? `브랜드 ${WEEKLY.brands.length}개 취급` : `${brandFilter} 기준`, "var(--amber)", "var(--amber)", null, false, true);
 
