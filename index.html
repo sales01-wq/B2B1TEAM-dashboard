@@ -1505,7 +1505,7 @@ function renderWeekly() {
 
   document.getElementById("weeklyTitle").textContent = `${WEEKLY_TARGET_YEAR}년 ${mo}월 주간 매출`;
   document.getElementById("weeklyBrandAchieveTitle").textContent = `브랜드별 ${mo}월 목표 · 계획 달성률`;
-  document.getElementById("weeklyBrandAchieveDesc").textContent = `${mo}월 실적(실측)은 B2B 북미·러시아/CIS 시트 합산 기준`;
+  document.getElementById("weeklyBrandAchieveDesc").textContent = `${mo}월 실적(실측)은 B2B 북미·러시아/CIS 시트 합산 기준 · 지역별 목표·계획은 채널 행(러시아/CIS 채널 = 러시아/CIS, 나머지 = 북미) 기준`;
   document.getElementById("weeklyChannelAchieveTitle").textContent = `거래처(채널)별 ${mo}월 목표 · 계획 달성률`;
   document.getElementById("brandThTarget").textContent = `${mo}월 목표`;
   document.getElementById("brandThPlan").textContent = `${mo}월 계획`;
@@ -1561,24 +1561,43 @@ function renderWeekly() {
     const b = WEEKLY.brands.find((x) => x.name === cat);
     return b ? b.total : 0;
   };
-  const brandAchieveRows = Object.keys(PLAN).map((cat) => {
-    const augPlanRow = PLAN[cat].monthly[WEEKLY_TARGET_MONTH - 1]; // selected month, 1-indexed => array index -1
-    return { name: cat, target: augPlanRow.target, plan: augPlanRow.plan, actual: realActualFor(cat) };
-  });
-  document.getElementById("weeklyBrandAchieveBody").innerHTML = brandAchieveRows.map((r) => {
-    const targetRate = rateOf(r.actual, r.target);
-    const planRate = rateOf(r.actual, r.plan);
-    const tColor = targetRate >= 100 ? "var(--sage)" : targetRate >= 70 ? "var(--amber)" : "var(--rose)";
-    const pColor = planRate >= 100 ? "var(--sage)" : planRate >= 70 ? "var(--amber)" : "var(--rose)";
-    return `
-      <tr>
-        <td style="font-weight:600;">${r.name}</td>
-        <td class="num">${wonShort(r.target)}</td>
-        <td class="num">${wonShort(r.plan)}</td>
-        <td class="num" style="font-weight:600;">${wonShort(r.actual)}</td>
-        <td class="num" style="color:${tColor}; font-weight:700;">${targetRate.toFixed(0)}%</td>
-        <td class="num" style="color:${pColor}; font-weight:700;">${planRate.toFixed(0)}%</td>
+  const regionActual = (cat, region) => WEEKLY.rows.reduce((sum, r) => {
+    if (r.source !== region) return sum;
+    if (cat !== "B2B 전체" && r.brand !== cat) return sum;
+    return sum + r.revenue;
+  }, 0);
+  const brandRateCells = (actual, target, plan) => {
+    const targetRate = rateOf(actual, target);
+    const planRate = rateOf(actual, plan);
+    const tColor = targetRate >= 100 ? "#2F6B3A" : targetRate >= 70 ? "#A8670A" : "#B02A3E";
+    const pColor = planRate >= 100 ? "#2F6B3A" : planRate >= 70 ? "#A8670A" : "#B02A3E";
+    return `<td class="num" style="color:${tColor}; font-weight:800;">${targetRate.toFixed(0)}%</td>
+        <td class="num" style="color:${pColor}; font-weight:800;">${planRate.toFixed(0)}%</td>`;
+  };
+  document.getElementById("weeklyBrandAchieveBody").innerHTML = Object.keys(PLAN).map((cat) => {
+    const m = PLAN[cat].monthly[WEEKLY_TARGET_MONTH - 1];
+    const ruCh = ((PLAN_CHANNELS[cat] || {})["러시아/CIS"] || {}).monthly;
+    const ru = ruCh ? ruCh[WEEKLY_TARGET_MONTH - 1] : null;
+    const ruT = ru ? ru.target : 0, ruP = ru ? ru.plan : 0;
+    const naT = m.target - ruT, naP = m.plan - ruP;
+    const naA = regionActual(cat, "북미"), ruA = regionActual(cat, "러시아/CIS");
+    const totA = realActualFor(cat);
+    const sub = (label, t, pl, ac, col) => `
+      <tr style="background:#FAF8F5;">
+        <td style="padding-left:22px; color:${col}; font-weight:600">${`<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${col};margin-right:8px;vertical-align:middle;"></span>`}${label}</td>
+        <td class="num">${wonShort(t)}</td>
+        <td class="num">${wonShort(pl)}</td>
+        <td class="num">${wonShort(ac)}</td>
+        ${brandRateCells(ac, t, pl)}
       </tr>`;
+    return `
+      <tr style="background:#F1EDE6; border-top:1px solid var(--line); font-weight:700;">
+        <td style="font-weight:800;">${cat} 합계</td>
+        <td class="num" style="font-weight:700;">${wonShort(m.target)}</td>
+        <td class="num" style="font-weight:700;">${wonShort(m.plan)}</td>
+        <td class="num" style="font-weight:800;">${wonShort(totA)}</td>
+        ${brandRateCells(totA, m.target, m.plan)}
+      </tr>${sub("북미", naT, naP, naA, "#3B6EA8")}${sub("러시아/CIS", ruT, ruP, ruA, "#B5651D")}`;
   }).join("");
 
   // ---- channel-level August: 실적(실측)=real B2B북미/러시아CIS mapped by customer, 예상마감=sheet's forecast ----
