@@ -1461,7 +1461,7 @@ weeklyMonthSelectEl.addEventListener("change", () => {
   if (getScriptUrl()) {
     status.textContent = `${WEEKLY_TARGET_MONTH}월 데이터를 구글시트에서 불러오는 중...`;
     status.style.color = "var(--slate)";
-    doRefresh();
+    doRefresh("snapshot");
   } else {
     status.textContent = `${WEEKLY_TARGET_MONTH}월 데이터를 보려면 새로고침이 필요해요 — "🔄 구글시트에서 새로고침"을 눌러주세요.`;
     status.style.color = "var(--amber)";
@@ -1825,11 +1825,11 @@ function sanitizeScriptUrl(url) {
   return url.replace(/\/+$/, "");
 }
 
-async function fetchSheetData() {
+async function fetchSheetData(mode) {
   const rawUrl = getScriptUrl();
   if (!rawUrl) throw new Error("Apps Script URL이 설정되지 않았어요. 위의 '⚙️ Apps Script URL 설정'을 먼저 눌러주세요.");
   const url = sanitizeScriptUrl(rawUrl);
-  const data = await loadJSONP(url, 60000);
+  const data = await loadJSONP(url + "?mode=" + (mode || "refresh"), 60000);
   if (!data.ok) throw new Error(data.error || "Apps Script에서 오류를 반환했어요.");
   return data; // { sonik, jipgye, naSheet, ruSheet, planWeekly, generatedAt }
 }
@@ -2245,7 +2245,8 @@ async function loadSharedDataIfNewer() {
   }
 }
 
-async function doRefresh() {
+async function doRefresh(mode) {
+  mode = mode === "snapshot" ? "snapshot" : "refresh";
   const btn = document.getElementById("refreshBtn");
   const icon = document.getElementById("refreshIcon");
   const status = document.getElementById("refreshStatus");
@@ -2254,7 +2255,7 @@ async function doRefresh() {
   status.textContent = "구글시트에서 불러오는 중... (처음 실행은 최대 1분 정도 걸릴 수 있어요)";
   status.style.color = "var(--slate)";
   try {
-    const data = await fetchSheetData();
+    const data = await fetchSheetData(mode);
 
     const rawAll = buildRawRecords(data.sonik);
     const sumAgg = buildSumAgg(data.jipgye);
@@ -2265,11 +2266,15 @@ async function doRefresh() {
     AGG = rebuilt.AGG; BRANDAGG = rebuilt.BRANDAGG; CUST = rebuilt.CUST; TXN = rebuilt.TXN;
     PLAN = planBuilt.PLAN; PLAN_CHANNELS = planBuilt.PLAN_CHANNELS; WEEKLY = weeklyBuilt;
 
-    const nowStr = nowStamp();
-    applyNewDataAndRerender(`${nowStr} (구글시트 새로고침)`);
-    await saveSharedData(nowStr);
-
-    status.textContent = `✓ ${nowStr} 기준으로 새로고침 완료 (다른 사람에게도 공유됨)`;
+    const gen = data.generatedAt ? new Date(data.generatedAt) : new Date();
+    const nowStr = gen.toLocaleString("sv-SE", { timeZone: "Asia/Seoul" }).slice(0, 16);
+    if (mode === "snapshot") {
+      applyNewDataAndRerender(`${nowStr} (공용 저장 데이터)`);
+      status.textContent = `✓ 마지막 새로고침(${nowStr}) 데이터를 불러왔어요. 최신 시트값이 필요하면 🔄를 눌러주세요.`;
+    } else {
+      applyNewDataAndRerender(`${nowStr} (구글시트 새로고침)`);
+      status.textContent = `✓ ${nowStr} 기준으로 새로고침 완료 — 다른 사람이 열어도 이 데이터가 보여요`;
+    }
     status.style.color = "var(--sage)";
   } catch (err) {
     console.error(err);
@@ -2280,7 +2285,7 @@ async function doRefresh() {
     icon.textContent = "🔄";
   }
 }
-document.getElementById("refreshBtn").addEventListener("click", doRefresh);
+document.getElementById("refreshBtn").addEventListener("click", () => doRefresh("refresh"));
 loadSharedDataIfNewer();
 
 // ---- Apps Script URL config panel ----
@@ -2340,15 +2345,16 @@ renderWeekly();
 // the viewer opens the dashboard in a different month than that snapshot,
 // automatically refresh so "월별 매출" shows real data for the current month
 // right away (falls back to a prompt if no Apps Script URL is configured).
-const STATIC_WEEKLY_DATA_MONTH = 8;
-if (WEEKLY_TARGET_MONTH !== STATIC_WEEKLY_DATA_MONTH) {
+// 구글시트가 모두에게 공통된 원본이므로, 누가 열든 열 때마다 시트에서 최신 데이터를 자동으로 불러온다.
+// (한 사람이 시트를 업데이트하면 다른 사람은 페이지를 열거나 새로고침(F5)만 해도 같은 최신값을 봄)
+{
   const status = document.getElementById("refreshStatus");
   if (getScriptUrl()) {
-    status.textContent = `${WEEKLY_TARGET_MONTH}월 데이터를 구글시트에서 자동으로 불러오는 중...`;
+    status.textContent = "공용 저장 데이터를 불러오는 중...";
     status.style.color = "var(--slate)";
-    doRefresh();
+    doRefresh("snapshot");
   } else {
-    status.textContent = `이 파일엔 ${STATIC_WEEKLY_DATA_MONTH}월 데이터만 들어있어요 — ${WEEKLY_TARGET_MONTH}월을 보려면 "🔄 새로고침"을 눌러주세요.`;
+    status.textContent = "Apps Script URL이 없어 파일에 저장된 데이터로 표시 중이에요.";
     status.style.color = "var(--amber)";
   }
 }
