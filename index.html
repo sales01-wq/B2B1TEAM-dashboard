@@ -1458,8 +1458,11 @@ weeklyBrandFilterEl.addEventListener("change", renderWeekly);
 weeklyMonthSelectEl.addEventListener("change", () => {
   WEEKLY_TARGET_MONTH = parseInt(weeklyMonthSelectEl.value, 10);
   const status = document.getElementById("refreshStatus");
-  if (getScriptUrl()) {
-    status.textContent = `${WEEKLY_TARGET_MONTH}월 데이터를 구글시트에서 불러오는 중...`;
+  if (LAST_RAW_DATA) {
+    // 이미 받아 둔 데이터로 화면 안에서만 다시 계산 (시트/서버 호출 없음)
+    doRefresh("local");
+  } else if (getScriptUrl()) {
+    status.textContent = `${WEEKLY_TARGET_MONTH}월 데이터를 불러오는 중...`;
     status.style.color = "var(--slate)";
     doRefresh("snapshot");
   } else {
@@ -2245,8 +2248,9 @@ async function loadSharedDataIfNewer() {
   }
 }
 
+let LAST_RAW_DATA = null;
 async function doRefresh(mode) {
-  mode = mode === "snapshot" ? "snapshot" : "refresh";
+  mode = mode === "snapshot" ? "snapshot" : mode === "local" ? "local" : "refresh";
   const btn = document.getElementById("refreshBtn");
   const icon = document.getElementById("refreshIcon");
   const status = document.getElementById("refreshStatus");
@@ -2255,7 +2259,8 @@ async function doRefresh(mode) {
   status.textContent = "구글시트에서 불러오는 중... (처음 실행은 최대 1분 정도 걸릴 수 있어요)";
   status.style.color = "var(--slate)";
   try {
-    const data = await fetchSheetData(mode);
+    const data = mode === "local" ? LAST_RAW_DATA : await fetchSheetData(mode);
+    LAST_RAW_DATA = data;
 
     const rawAll = buildRawRecords(data.sonik);
     const sumAgg = buildSumAgg(data.jipgye);
@@ -2268,7 +2273,10 @@ async function doRefresh(mode) {
 
     const gen = data.generatedAt ? new Date(data.generatedAt) : new Date();
     const nowStr = gen.toLocaleString("sv-SE", { timeZone: "Asia/Seoul" }).slice(0, 16);
-    if (mode === "snapshot") {
+    if (mode === "local") {
+      applyNewDataAndRerender(`${nowStr} (저장 데이터)`);
+      status.textContent = `✓ ${WEEKLY_TARGET_MONTH}월 화면으로 전환했어요 (데이터 기준: ${nowStr})`;
+    } else if (mode === "snapshot") {
       applyNewDataAndRerender(`${nowStr} (공용 저장 데이터)`);
       status.textContent = `✓ 마지막 새로고침(${nowStr}) 데이터를 불러왔어요. 최신 시트값이 필요하면 🔄를 눌러주세요.`;
     } else {
