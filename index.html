@@ -2248,6 +2248,33 @@ async function loadSharedDataIfNewer() {
   }
 }
 
+// ---- 브라우저 캐시(IndexedDB): 두 번째 방문부터는 저장된 데이터로 즉시 표시하고, 뒤에서 최신본을 확인 ----
+function idbOpen() {
+  return new Promise((resolve, reject) => {
+    try {
+      const req = indexedDB.open("b2b-dashboard-cache", 1);
+      req.onupgradeneeded = () => req.result.createObjectStore("kv");
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    } catch (e) { reject(e); }
+  });
+}
+async function idbSet(value) {
+  try {
+    const db = await idbOpen();
+    db.transaction("kv", "readwrite").objectStore("kv").put(value, "raw");
+  } catch (e) { /* 캐시 실패는 무시 */ }
+}
+async function idbGet() {
+  try {
+    const db = await idbOpen();
+    return await new Promise((resolve) => {
+      const r = db.transaction("kv", "readonly").objectStore("kv").get("raw");
+      r.onsuccess = () => resolve(r.result || null);
+      r.onerror = () => resolve(null);
+    });
+  } catch (e) { return null; }
+}
 let LAST_RAW_DATA = null;
 async function doRefresh(mode) {
   mode = mode === "snapshot" ? "snapshot" : mode === "local" ? "local" : "refresh";
@@ -2261,6 +2288,7 @@ async function doRefresh(mode) {
   try {
     const data = mode === "local" ? LAST_RAW_DATA : await fetchSheetData(mode);
     LAST_RAW_DATA = data;
+    if (mode !== "local") idbSet(data);
 
     const rawAll = buildRawRecords(data.sonik);
     const sumAgg = buildSumAgg(data.jipgye);
@@ -2360,7 +2388,16 @@ renderWeekly();
   if (getScriptUrl()) {
     status.textContent = "공용 저장 데이터를 불러오는 중...";
     status.style.color = "var(--slate)";
-    doRefresh("snapshot");
+    (async () => {
+      const cached = await idbGet();
+      if (cached && cached.sonik) {
+        LAST_RAW_DATA = cached;
+        await doRefresh("local"); // 캐시로 즉시 표시
+        status.textContent = "저장된 데이터로 먼저 표시했어요 · 최신 데이터 확인 중...";
+        status.style.color = "var(--slate)";
+      }
+      doRefresh("snapshot"); // 뒤에서 최신 공용 데이터로 갱신
+    })();
   } else {
     status.textContent = "Apps Script URL이 없어 파일에 저장된 데이터로 표시 중이에요.";
     status.style.color = "var(--amber)";
