@@ -2276,49 +2276,89 @@ async function idbGet() {
   } catch (e) { return null; }
 }
 let LAST_RAW_DATA = null;
+// 모드: refresh = 시트 전체 읽기(+공용 저장), computed = 공용 계산결과(가장 빠름), snapshot = 공용 원본, local = 월 전환(재계산만), cached = 브라우저 캐시
+function kstLabel(iso) {
+  const gen = iso ? new Date(iso) : new Date();
+  return gen.toLocaleString("sv-SE", { timeZone: "Asia/Seoul" }).slice(0, 16);
+}
+function postComputedToServer(payload) {
+  const rawUrl = getScriptUrl();
+  if (!rawUrl) return;
+  try {
+    fetch(sanitizeScriptUrl(rawUrl), { method: "POST", mode: "no-cors", headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify(payload) }).catch(() => {});
+  } catch (e) { /* 공유 저장 실패해도 내 화면은 정상 */ }
+}
 async function doRefresh(mode) {
-  mode = mode === "snapshot" ? "snapshot" : mode === "local" ? "local" : "refresh";
+  mode = ["snapshot", "local", "computed", "cached", "refresh"].includes(mode) ? mode : "refresh";
   const btn = document.getElementById("refreshBtn");
   const icon = document.getElementById("refreshIcon");
   const status = document.getElementById("refreshStatus");
-  btn.disabled = true;
-  icon.textContent = "⏳";
-  status.textContent = "구글시트에서 불러오는 중... (처음 실행은 최대 1분 정도 걸릴 수 있어요)";
-  status.style.color = "var(--slate)";
+  const quiet = mode === "local" || mode === "cached";
+  if (!quiet) {
+    btn.disabled = true;
+    icon.textContent = "⏳";
+    status.textContent = mode === "refresh" ? "구글시트에서 불러오는 중... (최대 1분 정도 걸릴 수 있어요)" : "공용 저장 데이터를 불러오는 중...";
+    status.style.color = "var(--slate)";
+  }
   try {
-    const data = mode === "local" ? LAST_RAW_DATA : await fetchSheetData(mode);
-    LAST_RAW_DATA = data;
-    if (mode !== "local") idbSet(data);
-
-    const rawAll = buildRawRecords(data.sonik);
-    const sumAgg = buildSumAgg(data.jipgye);
-    const rebuilt = rebuildAllFromRaw(rawAll, sumAgg);
-    const planBuilt = buildPlanAndChannels(data.planWeekly);
-    const weeklyBuilt = buildWeekly(data.naSheet, data.ruSheet);
-
-    AGG = rebuilt.AGG; BRANDAGG = rebuilt.BRANDAGG; CUST = rebuilt.CUST; TXN = rebuilt.TXN;
-    PLAN = planBuilt.PLAN; PLAN_CHANNELS = planBuilt.PLAN_CHANNELS; WEEKLY = weeklyBuilt;
-
-    const gen = data.generatedAt ? new Date(data.generatedAt) : new Date();
-    const nowStr = gen.toLocaleString("sv-SE", { timeZone: "Asia/Seoul" }).slice(0, 16);
+    let label, msg;
     if (mode === "local") {
-      applyNewDataAndRerender(`${nowStr} (저장 데이터)`);
-      status.textContent = `✓ ${WEEKLY_TARGET_MONTH}월 화면으로 전환했어요 (데이터 기준: ${nowStr})`;
-    } else if (mode === "snapshot") {
-      applyNewDataAndRerender(`${nowStr} (공용 저장 데이터)`);
-      status.textContent = `✓ 마지막 새로고침(${nowStr}) 데이터를 불러왔어요. 최신 시트값이 필요하면 🔄를 눌러주세요.`;
+      // 월 전환: 이미 가진 작은 시트 데이터로 계획/주간만 다시 계산
+      const d = LAST_RAW_DATA;
+      const planBuilt = buildPlanAndChannels(d.planWeekly);
+      PLAN = planBuilt.PLAN; PLAN_CHANNELS = planBuilt.PLAN_CHANNELS; WEEKLY = buildWeekly(d.naSheet, d.ruSheet);
+      label = `${kstLabel(d.generatedAt)} (저장 데이터)`;
+      msg = `✓ ${WEEKLY_TARGET_MONTH}월 화면으로 전환했어요 (데이터 기준: ${kstLabel(d.generatedAt)})`;
+    } else if (mode === "cached" || mode === "computed") {
+      let d;
+      if (mode === "cached") d = LAST_RAW_DATA;
+      else {
+        d = await fetchSheetData("computed");
+        if (!d.AGG) { // 서버에 계산결과가 아직 없으면 원본 방식으로
+          icon.textContent = "🔄"; btn.disabled = false;
+          return doRefresh("snapshot");
+        }
+        if (LAST_RAW_DATA && LAST_RAW_DATA.generatedAt === d.generatedAt && LAST_RAW_DATA.AGG) { // 캐시와 동일 → 재계산 불필요
+          status.textContent = `✓ 최신 데이터예요 (기준: ${kstLabel(d.generatedAt)})`;
+          status.style.color = "var(--sage)";
+          return;
+        }
+        idbSet(d);
+      }
+      LAST_RAW_DATA = d;
+      AGG = d.AGG; BRANDAGG = d.BRANDAGG; CUST = d.CUST; TXN = d.TXN;
+      const planBuilt = buildPlanAndChannels(d.planWeekly);
+      PLAN = planBuilt.PLAN; PLAN_CHANNELS = planBuilt.PLAN_CHANNELS; WEEKLY = buildWeekly(d.naSheet, d.ruSheet);
+      label = `${kstLabel(d.generatedAt)} (공용 저장 데이터)`;
+      msg = mode === "cached"
+        ? "저장된 데이터로 먼저 표시했어요 · 최신 데이터 확인 중..."
+        : `✓ 마지막 새로고침(${kstLabel(d.generatedAt)}) 데이터예요. 최신 시트값이 필요하면 🔄를 눌러주세요.`;
     } else {
-      applyNewDataAndRerender(`${nowStr} (구글시트 새로고침)`);
-      status.textContent = `✓ ${nowStr} 기준으로 새로고침 완료 — 다른 사람이 열어도 이 데이터가 보여요`;
+      const data = await fetchSheetData(mode);
+      const rawAll = buildRawRecords(data.sonik);
+      const sumAgg = buildSumAgg(data.jipgye);
+      const rebuilt = rebuildAllFromRaw(rawAll, sumAgg);
+      const planBuilt = buildPlanAndChannels(data.planWeekly);
+      AGG = rebuilt.AGG; BRANDAGG = rebuilt.BRANDAGG; CUST = rebuilt.CUST; TXN = rebuilt.TXN;
+      PLAN = planBuilt.PLAN; PLAN_CHANNELS = planBuilt.PLAN_CHANNELS; WEEKLY = buildWeekly(data.naSheet, data.ruSheet);
+      const computed = { AGG, BRANDAGG, CUST, TXN, naSheet: data.naSheet, ruSheet: data.ruSheet, planWeekly: data.planWeekly, generatedAt: data.generatedAt || new Date().toISOString() };
+      LAST_RAW_DATA = computed;
+      idbSet(computed);
+      postComputedToServer(computed); // 다른 사람에게 가벼운 계산결과 공유
+      label = `${kstLabel(computed.generatedAt)} (${mode === "refresh" ? "구글시트 새로고침" : "공용 저장 데이터"})`;
+      msg = mode === "refresh"
+        ? `✓ ${kstLabel(computed.generatedAt)} 기준으로 새로고침 완료 — 다른 사람이 열어도 이 데이터가 보여요`
+        : `✓ 마지막 새로고침(${kstLabel(computed.generatedAt)}) 데이터를 불러왔어요.`;
     }
-    status.style.color = "var(--sage)";
+    applyNewDataAndRerender(label);
+    status.textContent = msg;
+    status.style.color = mode === "cached" ? "var(--slate)" : "var(--sage)";
   } catch (err) {
     console.error(err);
     status.textContent = `새로고침 실패: ${err.message || err} — Apps Script URL이 맞는지, 배포 시 "액세스 권한: 전체"로 설정했는지 확인해 주세요.`;
     status.style.color = "var(--rose)";
   } finally {
-    btn.disabled = false;
-    icon.textContent = "🔄";
+    if (!quiet) { btn.disabled = false; icon.textContent = "🔄"; }
   }
 }
 document.getElementById("refreshBtn").addEventListener("click", () => doRefresh("refresh"));
@@ -2390,13 +2430,11 @@ renderWeekly();
     status.style.color = "var(--slate)";
     (async () => {
       const cached = await idbGet();
-      if (cached && cached.sonik) {
+      if (cached && cached.AGG) {
         LAST_RAW_DATA = cached;
-        await doRefresh("local"); // 캐시로 즉시 표시
-        status.textContent = "저장된 데이터로 먼저 표시했어요 · 최신 데이터 확인 중...";
-        status.style.color = "var(--slate)";
+        await doRefresh("cached"); // 브라우저 캐시로 즉시 표시
       }
-      doRefresh("snapshot"); // 뒤에서 최신 공용 데이터로 갱신
+      doRefresh("computed"); // 뒤에서 공용 최신 계산결과 확인
     })();
   } else {
     status.textContent = "Apps Script URL이 없어 파일에 저장된 데이터로 표시 중이에요.";
