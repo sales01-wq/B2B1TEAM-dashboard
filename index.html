@@ -2828,7 +2828,7 @@ function renderUnlockt() {
   const sm = (k) => items.reduce((a2, it) => a2 + it[k], 0);
   const sShip = sm("shipped"), sArr = sm("arrived"), sTr = sm("transit"), sSold = sm("sold"), sSt = sm("soldStore"), sOn = sm("soldOnline");
   document.getElementById("ulSummary").innerHTML =
-    `<span><b>출고</b> ${ulFmt(sShip)}개 <span class="ulm">(도착 ${ulFmt(sArr)} + 🚚 배송중 ${ulFmt(sTr)})</span></span>` +
+    `<span><b>출고</b> ${ulFmt(sShip)}개 <span class="ulm">(도착 ${ulFmt(sArr)} + 🚢 배송중 ${ulFmt(sTr)})</span></span>` +
     `<span><b>판매</b> ${ulFmt(sSold)}개 <span class="ulm">(오프라인 ${ulFmt(sSt)} + 온라인 ${ulFmt(sOn)}${sSold > 0 ? ` · 온라인 ${(sOn / sSold * 100).toFixed(1)}%` : ""})</span></span>` +
     `<span><b>재고</b> ${ulFmt(sArr - sSold)}개 <span class="ulm">(도착 − 판매)</span></span>`;
 
@@ -2855,7 +2855,7 @@ function renderUnlockt() {
       ${head("recent", "주평균 판매")}
       ${head("remain", "재고")}
       ${head("weeks", "재고 주수")}
-      ${head("transit", "🚚 배송중")}
+      ${head("transit", "🚢 배송중")}
       ${head("pending", "도착예정<br><span style=\"font-weight:400;font-size:10px;\">출고 전</span>")}
       ${head("status", "상태", "")}
     </tr>`;
