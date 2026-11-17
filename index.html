@@ -2578,6 +2578,12 @@ function ulStatusOf(remain, recent, hasSales) {
   return "재고 과다";
 }
 
+// 출고 예정 월별로 누적해서 도착했다고 가정했을 때의 상태 (재고 + 배송중 + 출고 예정 누적, 최근 4주 판매 평균은 그대로)
+function ulProject(remain, transit, pendM, recent, hasSales) {
+  let stock = remain + transit;
+  return Object.keys(pendM || {}).sort().map((m) => { stock += pendM[m]; return { m, qty: pendM[m], stock, status: ulStatusOf(stock, recent, hasSales) }; });
+}
+
 function buildUnlockt(raw, asOfDate) {
   if (!raw || (!raw.weekly && !raw.src)) return null;
   const ship = ulAliasShip(raw.ship);
@@ -2660,7 +2666,7 @@ function buildUnlockt(raw, asOfDate) {
       const ny = mo === 12 ? yearOfMonth + 1 : yearOfMonth, nm = mo === 12 ? 1 : mo + 1;
       arr = ulUTC(ny, nm, UL_FALLBACK_DAY);
     }
-    (arrivals[pn] = arrivals[pn] || []).push({ date: arr, ship: shipD, qty, month: mo });
+    (arrivals[pn] = arrivals[pn] || []).push({ date: arr, ship: shipD, qty, month: mo, ym: yearOfMonth + "-" + String(mo).padStart(2, "0") });
   });
 
   // ---- 품목 목록: 셀아웃 시트에 있는 품목 + (판매 데이터 없이 출고만 있는 품목) ----
@@ -2676,11 +2682,11 @@ function buildUnlockt(raw, asOfDate) {
       recent = tail.length ? tail.reduce((a, b) => a + b, 0) / tail.length : 0;
     }
     const arr = arrivals[pn] || [];
-    let arrived = 0, transit = 0, pending = 0; const transitList = [];
+    let arrived = 0, transit = 0, pending = 0; const transitList = [], pendM = {};
     arr.forEach((a) => {
       if (a.date <= asOfU) arrived += a.qty;
       else if (a.ship && a.ship <= asOfU) { transit += a.qty; transitList.push({ d: ulISO(a.date), q: a.qty }); } // 출고가능일 경과 · 아직 미도착
-      else pending += a.qty; // 출고 전(출고가능일 미경과 또는 날짜 미정)
+      else { pending += a.qty; const pk = a.ship ? ulISO(a.ship).slice(0, 7) : a.ym; pendM[pk] = (pendM[pk] || 0) + a.qty; } // 출고 전(출고가능일 미경과 또는 날짜 미정) · 출고 예정 월별
     });
     const incoming = transit + pending;
     const remainRaw = arrived - sold;
@@ -2691,7 +2697,7 @@ function buildUnlockt(raw, asOfDate) {
     arr.forEach((a) => { const k = ulISO(a.date).slice(0, 7); inMonth[k] = (inMonth[k] || 0) + a.qty; });
     return {
       brand: (s && s.brand) || info.brand || "", pn, name: ulCleanName(krAll[pn] || (s && s.name) || info.name || ""),
-      arrived, incoming, transit, pending, transitList, sold, soldOnline, soldStore: sold - soldOnline, shipped: arrived + transit, remain, remainRaw, recent, weeks, status: ulStatusOf(remain, recent, hasSales),
+      arrived, incoming, transit, pending, pendM, transitList, sold, soldOnline, soldStore: sold - soldOnline, shipped: arrived + transit, remain, remainRaw, recent, weeks, status: ulStatusOf(remain, recent, hasSales),
       sellThrough: arrived > 0 ? sold / arrived : null, inMonth, weekly: s ? s.qty : [],
     };
   }).filter((it) => it.arrived || it.incoming || it.sold);
@@ -2746,9 +2752,9 @@ function ulGroup(items, mode) {
   const map = new Map();
   items.forEach((it) => {
     const label = it.brand || "(브랜드 없음)";
-    if (!map.has(label)) map.set(label, { label, brand: label, n: 0, arrived: 0, incoming: 0, sold: 0, recent: 0, transit: 0, pending: 0, shipped: 0, soldStore: 0, soldOnline: 0, hasSales: false });
+    if (!map.has(label)) map.set(label, { label, brand: label, n: 0, arrived: 0, incoming: 0, sold: 0, recent: 0, transit: 0, pending: 0, pendM: {}, shipped: 0, soldStore: 0, soldOnline: 0, hasSales: false });
     const g = map.get(label);
-    g.n++; g.arrived += it.arrived; g.incoming += it.incoming; g.transit += it.transit; g.pending += it.pending; g.shipped += it.shipped; g.soldStore += it.soldStore; g.soldOnline += it.soldOnline; g.sold += it.sold; g.recent += it.recent;
+    g.n++; g.arrived += it.arrived; g.incoming += it.incoming; g.transit += it.transit; g.pending += it.pending; Object.keys(it.pendM || {}).forEach((k) => { g.pendM[k] = (g.pendM[k] || 0) + it.pendM[k]; }); g.shipped += it.shipped; g.soldStore += it.soldStore; g.soldOnline += it.soldOnline; g.sold += it.sold; g.recent += it.recent;
     if (it.status !== "판매 데이터 없음") g.hasSales = true;
   });
   return Array.from(map.values()).map((g) => {
@@ -2856,6 +2862,12 @@ function renderUnlockt() {
     const sc = UL_STATUS_COLOR[r.status] || "#6B7280";
     const wTxt = r.weeks === null ? "–" : (r.remain <= 0 ? "소진" : r.weeks.toFixed(1) + "주");
     const tip = `출고 누계 ${ulFmt(r.shipped)} = 도착완료 ${ulFmt(r.arrived)} + 배송중 ${ulFmt(r.transit)} · 재고 = 도착완료 ${ulFmt(r.arrived)} − 판매 ${ulFmt(r.sold)} = ${ulFmt(r.remain)}`;
+    const ymLabel = (k) => (k.slice(0, 4) === model.asOf.slice(0, 4) ? "" : "'" + k.slice(2, 4) + " ") + (+k.slice(5)) + "월";
+    const pm = Object.keys(r.pendM || {}).sort();
+    const pendCell = pm.length ? pm.map((k) => `<div><span style="color:var(--slate);font-size:11px;">${ymLabel(k)}</span> <b>${ulFmt(r.pendM[k])}</b></div>`).join("") : (r.pending ? ulFmt(r.pending) : "–");
+    // 재고 부족 계열(소진/4주/8주)은 출고 예정 물량이 월별로 들어오면 어떤 상태가 되는지 같이 표시
+    const proj = UL_SHORT.includes(r.status) && pm.length ? ulProject(r.remain, r.transit, r.pendM, r.recent, r.status !== "판매 데이터 없음") : [];
+    const projCell = proj.map((x) => { const c = UL_STATUS_COLOR[x.status] || "#6B7280"; return `<div style="font-size:10.5px;margin-top:3px;white-space:nowrap;color:var(--slate);">${ymLabel(x.m)} 출고 시 → <b style="color:${c};">${x.status}</b></div>`; }).join("");
     return `<tr title="${tip}">
       <td class="num" style="color:var(--ink);font-weight:700;">${ul.view === "item" ? (r.rank || "–") : i + 1}</td>
       <td style="white-space:nowrap;">${r.brand}</td>
@@ -2869,8 +2881,8 @@ function renderUnlockt() {
       <td class="num" style="font-weight:700;color:${r.remain < 0 ? "#B02A3E" : "var(--ink)"};">${ulFmt(r.remain)}</td>
       <td class="num" style="white-space:nowrap;">${wTxt}</td>
       <td class="num" style="${r.transit ? "font-weight:800;color:#B36A00;background:#FFF6E3;" : "color:var(--slate);"}" ${r.transitList && r.transitList.length ? `title="${r.transitList.map((t) => `${t.d.slice(5).replace("-", "/")} 도착 ${ulFmt(t.q)}개`).join(" · ")}"` : ""}>${r.transit ? ulFmt(r.transit) : "–"}</td>
-      <td class="num">${r.pending ? ulFmt(r.pending) : "–"}</td>
-      <td><span style="display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:700;color:${sc};background:${sc}1A;white-space:nowrap;">${r.status}</span></td>
+      <td class="num" style="white-space:nowrap;">${pendCell}</td>
+      <td><span style="display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:700;color:${sc};background:${sc}1A;white-space:nowrap;">${r.status}</span>${projCell}</td>
     </tr>`;
   }).join("") : `<tr><td colspan="14" style="text-align:center;color:var(--slate);padding:18px;">조건에 맞는 품목이 없어요.</td></tr>`;
   document.getElementById("ulCount").textContent = `${rows.length}${ul.view === "item" ? "개 품목" : "개 그룹"}`;
