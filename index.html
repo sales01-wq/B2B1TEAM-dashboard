@@ -2886,7 +2886,7 @@ function renderUnlockt() {
       <td><span style="display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:700;color:${sc};background:${sc}1A;white-space:nowrap;">${r.status}</span>${projCell}</td>
     </tr>`;
   }).join("") : `<tr><td colspan="14" style="text-align:center;color:var(--slate);padding:18px;">조건에 맞는 품목이 없어요.</td></tr>`;
-  document.getElementById("ulCount").textContent = `${rows.length}${ul.view === "item" ? "개 품목" : "개 그룹"}`;
+  document.getElementById("ulCount").textContent = `${rows.length}${ul.view === "item" ? "개 품목" : "개 그룹"} · 코드 버전 1117-18:33`;
 }
 
 // ---- 차트 헬퍼 (개수 단위) ----
