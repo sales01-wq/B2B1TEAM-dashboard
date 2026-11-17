@@ -77,6 +77,8 @@
   .ellipsis { max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .table-scroll { overflow-x: auto; }
   .table-scroll.tall { max-height: 480px; overflow-y: auto; }
+  .table-scroll.tall thead th { position: sticky; top: 0; z-index: 3; background: var(--panel); box-shadow: 0 1px 0 var(--line); }
+  .table-scroll.ul-tall { max-height: 72vh; }
   .expand-row { cursor: pointer; }
   .expand-row:hover { background: #FAF5EF; }
   .expand-caret { display: inline-block; margin-right: 4px; transition: transform 0.15s ease; font-size: 10px; color: var(--slate); }
@@ -344,7 +346,7 @@
         </div>
       </div>
       <div class="chart-desc" style="margin-bottom:6px;">품목 상세 · <span id="ulCount"></span> · 헤더를 누르면 정렬돼요</div>
-      <div class="table-scroll tall">
+      <div class="table-scroll tall ul-tall">
         <table>
           <thead id="ulHead"></thead>
           <tbody id="ulBody"></tbody>
@@ -1066,7 +1068,7 @@ ALL_BRANDS.forEach((b) => brandFilterEl.add(new Option("브랜드: " + b, b)));
 ALL_PERIODS.forEach((p) => periodFromEl.add(new Option("시작: " + p, p)));
 ALL_PERIODS.forEach((p) => periodToEl.add(new Option("종료: " + p, p)));
 periodFromEl.value = ALL_PERIODS[0];
-periodToEl.value = ALL_PERIODS[ALL_PERIODS.length - 1];
+periodToEl.value = periodOfToday(ALL_PERIODS);
 
 [brandFilterEl, periodFromEl, periodToEl].forEach((elx) => elx.addEventListener("change", renderOverview));
 costToggleEl.addEventListener("change", () => { costLineVisible = costToggleEl.checked; renderOverview(); });
@@ -1215,7 +1217,7 @@ BRANDAGG.brandList.forEach((b) => brandSelectEl.add(new Option(b, b)));
 TXN.periods.forEach((p) => brandPeriodFromEl.add(new Option("시작: " + p, p)));
 TXN.periods.forEach((p) => brandPeriodToEl.add(new Option("종료: " + p, p)));
 brandPeriodFromEl.value = TXN.periods[0];
-brandPeriodToEl.value = TXN.periods[TXN.periods.length - 1];
+brandPeriodToEl.value = periodOfToday(TXN.periods);
 [brandSelectEl, brandPeriodFromEl, brandPeriodToEl].forEach((elx) => elx.addEventListener("change", renderBrand));
 
 function renderBrand() {
@@ -1314,8 +1316,15 @@ const custPeriodToEl = document.getElementById("custPeriodTo");
 CUST.customerList.forEach((c) => customerSelectEl.add(new Option(c.customer, c.customer)));
 TXN.periods.forEach((p) => custPeriodFromEl.add(new Option("시작: " + p, p)));
 TXN.periods.forEach((p) => custPeriodToEl.add(new Option("종료: " + p, p)));
+// 종료월 기본값 = 오늘이 속한 달 (목록에 없으면 오늘 이전의 가장 가까운 달)
+function periodOfToday(periods) {
+  const d = new Date(), cur = d.getFullYear() + "." + String(d.getMonth() + 1).padStart(2, "0");
+  if (periods.includes(cur)) return cur;
+  const past = periods.filter((p) => p <= cur);
+  return past.length ? past[past.length - 1] : periods[periods.length - 1];
+}
 custPeriodFromEl.value = TXN.periods[0];
-custPeriodToEl.value = TXN.periods[TXN.periods.length - 1];
+custPeriodToEl.value = periodOfToday(TXN.periods);
 [customerSelectEl, custPeriodFromEl, custPeriodToEl].forEach((elx) => elx.addEventListener("change", renderCustomer));
 
 function renderCustomer() {
@@ -2182,19 +2191,19 @@ function applyNewDataAndRerender(updatedAtLabel) {
   repopulateSelect(periodFromEl, ALL_PERIODS, (p) => "시작: " + p);
   repopulateSelect(periodToEl, ALL_PERIODS, (p) => "종료: " + p);
   if (!ALL_PERIODS.includes(periodFromEl.value)) periodFromEl.value = ALL_PERIODS[0];
-  if (!ALL_PERIODS.includes(periodToEl.value)) periodToEl.value = ALL_PERIODS[ALL_PERIODS.length - 1];
+  if (!ALL_PERIODS.includes(periodToEl.value)) periodToEl.value = periodOfToday(ALL_PERIODS);
 
   repopulateSelect(brandSelectEl, BRANDAGG.brandList);
   repopulateSelect(brandPeriodFromEl, TXN.periods, (p) => "시작: " + p);
   repopulateSelect(brandPeriodToEl, TXN.periods, (p) => "종료: " + p);
   if (!TXN.periods.includes(brandPeriodFromEl.value)) brandPeriodFromEl.value = TXN.periods[0];
-  if (!TXN.periods.includes(brandPeriodToEl.value)) brandPeriodToEl.value = TXN.periods[TXN.periods.length - 1];
+  if (!TXN.periods.includes(brandPeriodToEl.value)) brandPeriodToEl.value = periodOfToday(TXN.periods);
 
   repopulateSelect(customerSelectEl, CUST.customerList.map((c) => c.customer));
   repopulateSelect(custPeriodFromEl, TXN.periods, (p) => "시작: " + p);
   repopulateSelect(custPeriodToEl, TXN.periods, (p) => "종료: " + p);
   if (!TXN.periods.includes(custPeriodFromEl.value)) custPeriodFromEl.value = TXN.periods[0];
-  if (!TXN.periods.includes(custPeriodToEl.value)) custPeriodToEl.value = TXN.periods[TXN.periods.length - 1];
+  if (!TXN.periods.includes(custPeriodToEl.value)) custPeriodToEl.value = periodOfToday(TXN.periods);
 
   WEEKLY_BRANDS = ["전체", ...WEEKLY.brands.map((b) => b.name)];
   repopulateSelect(weeklyBrandFilterEl, WEEKLY_BRANDS, (b) => "브랜드: " + b);
