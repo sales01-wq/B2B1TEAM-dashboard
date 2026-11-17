@@ -2578,9 +2578,9 @@ function ulStatusOf(remain, recent, hasSales) {
   return "재고 과다";
 }
 
-// 출고 예정 월별로 누적해서 도착했다고 가정했을 때의 상태 (재고 + 배송중 + 출고 예정 누적, 최근 4주 판매 평균은 그대로)
+// 출고 예정 월별로 누적해서 도착했다고 가정했을 때의 상태 (재고 + 출고 예정 누적 · 배송중 제외, 최근 4주 판매 평균은 그대로)
 function ulProject(remain, transit, pendM, recent, hasSales) {
-  let stock = remain + transit;
+  let stock = remain; // 배송중 수량은 제외 (도착 완료 − 판매 재고에 출고 예정만 월별 누적)
   return Object.keys(pendM || {}).sort().map((m) => { stock += pendM[m]; return { m, qty: pendM[m], stock, status: ulStatusOf(stock, recent, hasSales) }; });
 }
 
