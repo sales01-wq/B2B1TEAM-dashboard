@@ -2663,8 +2663,9 @@ function buildUnlockt(raw, asOfDate) {
       shipD = ulUTC(y, md[0], md[1]);
       arr = new Date(shipD.getTime() + UL_LAG_DAYS * UL_DAY_MS);
     } else {
-      const ny = mo === 12 ? yearOfMonth + 1 : yearOfMonth, nm = mo === 12 ? 1 : mo + 1;
-      arr = ulUTC(ny, nm, UL_FALLBACK_DAY);
+      // 출고가능일 없음 → 해당 월 말일에 출고한 것으로 보고, 그날 + 20일 후 도착
+      shipD = ulUTC(yearOfMonth, mo + 1, 0);
+      arr = new Date(shipD.getTime() + UL_FALLBACK_DAY * UL_DAY_MS);
     }
     (arrivals[pn] = arrivals[pn] || []).push({ date: arr, ship: shipD, qty, month: mo, ym: yearOfMonth + "-" + String(mo).padStart(2, "0") });
   });
@@ -2685,7 +2686,7 @@ function buildUnlockt(raw, asOfDate) {
     let arrived = 0, transit = 0, pending = 0; const transitList = [], pendM = {};
     arr.forEach((a) => {
       if (a.date <= asOfU) arrived += a.qty;
-      else if (a.ship && a.ship <= asOfU) { transit += a.qty; transitList.push({ d: ulISO(a.date), q: a.qty }); } // 출고가능일 경과 · 아직 미도착
+      else if (a.ship && a.ship <= asOfU) { transit += a.qty; transitList.push({ d: ulISO(a.date), q: a.qty }); } // 출고가능일 경과· 아직 미도착
       else { pending += a.qty; const pk = a.ship ? ulISO(a.ship).slice(0, 7) : a.ym; pendM[pk] = (pendM[pk] || 0) + a.qty; } // 출고 전(출고가능일 미경과 또는 날짜 미정) · 출고 예정 월별
     });
     const incoming = transit + pending;
